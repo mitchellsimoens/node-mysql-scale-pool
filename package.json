@@ -1,7 +1,7 @@
 {
-  "name": "mysql-pool",
+  "name": "node-mysql-scale-pool",
   "version": "1.0.0",
-  "description": "",
+  "description": "An improved pool class to use with node-mysql that can scale connections.",
   "main": "Pool.js",
   "scripts": {
     "test": "clear && mocha --recursive 'test/**/*.spec.js'"
