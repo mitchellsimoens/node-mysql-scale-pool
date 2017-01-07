@@ -85,6 +85,7 @@ describe('Pool', function () {
                     expect(instance._connections).to.be.null;
                     expect(instance._busyConnections).to.be.null;
                     expect(instance._freeConnections).to.be.null;
+                    expect(instance._queryQueue).to.be.null;
                 });
         });
 
@@ -209,6 +210,43 @@ describe('Pool', function () {
                 .query('SELECT 1;')
                 .catch(error => {
                     expect(mock).to.be.calledOnce;
+                    expect(error).to.be.an('error');
+                });
+        });
+
+        it('should queue the query', function () {
+            instance = new Pool({
+                maxConnectionLimit : 2
+            });
+
+            const promises = [];
+
+            promises.push(instance.query('SELECT 1;'));
+            promises.push(instance.query('SELECT 2;'));
+            promises.push(instance.query('SELECT 3;'));
+
+            expect(instance._queryQueue).to.have.lengthOf(1);
+
+            return Promise.all(promises);
+        });
+
+        it('should throw an error if queue is full', function () {
+            instance = new Pool({
+                queueLimit         : 1,
+                maxConnectionLimit : 1
+            });
+
+            const promises = [];
+
+            promises.push(instance.query('SELECT 1;'));
+            promises.push(instance.query('SELECT 2;'));
+            promises.push(instance.query('SELECT 3;'));
+
+            expect(instance._queryQueue).to.have.lengthOf(1);
+
+            return Promise
+                .all(promises)
+                .catch(error => {
                     expect(error).to.be.an('error');
                 });
         });

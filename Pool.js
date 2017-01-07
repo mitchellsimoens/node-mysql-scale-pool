@@ -36,6 +36,10 @@ class Pool {
 		 * has connected but is not querying.
 		 */
 		this._freeConnections = [];
+		/**
+		 * Holds queries that are queued when there are no free connections.
+		 */
+		this._queryQueue = [];
 	}
 
 	end (connection) {
@@ -54,7 +58,11 @@ class Pool {
 				return reject(new Error('This pool is closed'));
 			}
 
-			if (this._freeConnections.length === 0) {
+			if (this._freeConnections.length) {
+				let connection = this._freeConnections.shift();
+
+				resolve(connection);
+			} else {
 				if (this._connections.length < this.maxConnectionLimit) {
 					const connection = this.$createConnection();
 
@@ -67,24 +75,34 @@ class Pool {
 							reject(error);
 						});
 				} else {
-					//TODO create a queue! watch this.queueLimit
 					reject(new Error('No connections available'));
 				}
-			} else {
-				let connection = this._freeConnections.shift();
-
-				resolve(connection);
 			}
 		});
 	}
 
 	query (sql, values) {
 		return new Promise((resolve, reject) => {
-			this
-				.getConnection()
-				.then(this.$query.bind(this, sql, values))
-				.then(resolve)
-				.catch(reject);
+			if (this._closed) {
+				reject(new Error('This pool is closed'));
+			} else if (this._freeConnections.length === 0 && this._connections.length >= this.maxConnectionLimit) {
+				if (!this.queueLimit || this._queryQueue.length < this.queueLimit) {
+					this._queryQueue.push({
+						reject,
+						resolve,
+						sql,
+						values
+					});
+				} else {
+					reject(new Error('Query queue is full'));
+				}
+			} else {
+				this
+					.getConnection()
+					.then(connection => this.$query(connection, sql, values))
+					.then(resolve)
+					.catch(reject);
+			}
 		});
 	}
 
@@ -142,6 +160,7 @@ class Pool {
 			this._connections     =
 			this._busyConnections =
 			this._freeConnections =
+			this._queryQueue      =
 			null;
 
 		return arg;
@@ -172,7 +191,7 @@ class Pool {
 		return query;
 	}
 
-	$query (sql, values, connection) {
+	$query (connection, sql, values) {
 		return new Promise((resolve, reject) => {
 			const query = this.$createQuery(sql, values, (error, results) => {
 				if (error) {
@@ -184,6 +203,7 @@ class Pool {
 
 			this._busyConnections.push(connection);
 
+			//release the connection when a query ends
 			query.once('end', this.$releaseConnection.bind(this, connection));
 
 			connection.query(query);
@@ -191,28 +211,37 @@ class Pool {
 	}
 
 	$releaseConnection (connection) {
-		this.$remove(this._busyConnections, connection);
+		if (!this._closed) {
+			this.$remove(this._busyConnections, connection);
 
-		if (this._freeConnections.indexOf(connection) < 0) {
-			this._freeConnections.push(connection);
+			if (this._freeConnections.indexOf(connection) < 0) {
+				this._freeConnections.push(connection);
+			}
+
+			if (this._freeConnections.length > 0 && this._queryQueue.length) {
+				const item = this._queryQueue.shift();
+
+				this
+					.query(item.sql, item.values)
+					.then(item.resolve, item.reject);
+			}
 		}
 
 		return connection;
 	}
 
 	$removeConnection (connection) {
-		if (this._busyConnections.indexOf(connection) >= 0) {
-			console.log('connection doing something');
+		if (!this._closed) {
+			this.$remove(this._busyConnections, connection);
+			this.$remove(this._freeConnections, connection);
+			this.$remove(this._connections,     connection);
 		}
-
-		this.$remove(this._freeConnections, connection);
-		this.$remove(this._connections,     connection);
 
 		return connection;
 	}
 
 	$remove (arr, connection) {
-		let idx = arr.indexOf(connection);
+		const idx = arr.indexOf(connection);
 
 		if (idx >= 0) {
 			arr.splice(idx, 1);

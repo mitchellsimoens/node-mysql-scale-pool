@@ -18,9 +18,7 @@ class PoolConnection {
     }
 
     query (query) {
-        setTimeout(() => {
-            query._callback(null, []);
-        }, 0);
+        setTimeout(() => query._callback(null, []), 0);
     }
 }
 
