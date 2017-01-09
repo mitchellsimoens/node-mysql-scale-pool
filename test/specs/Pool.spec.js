@@ -62,13 +62,13 @@ describe('Pool', function () {
         it('should create connection arrays', function () {
             instance = new Pool();
 
-            expect(instance._connections).to.be.an('array');
+            expect(instance._connections).to.be.a('set');
             expect(instance._connections).to.be.empty;
 
-            expect(instance._busyConnections).to.be.an('array');
+            expect(instance._busyConnections).to.be.a('set');
             expect(instance._busyConnections).to.be.empty;
 
-            expect(instance._freeConnections).to.be.an('array');
+            expect(instance._freeConnections).to.be.a('set');
             expect(instance._freeConnections).to.be.empty;
         });
     });
@@ -97,14 +97,14 @@ describe('Pool', function () {
             const connections     = instance._connections;
             const freeConnections = instance._freeConnections;
 
-            connections.push(mock);
-            freeConnections.push(mock);
+            instance.$add(connections,     mock);
+            instance.$add(freeConnections, mock);
 
             return instance
                 .end()
                 .then(() => {
-                    expect(connections).to.not.contain(mock);
-                    expect(freeConnections).to.not.contain(mock);
+                    expect(connections.has(mock)).to.be.false;
+                    expect(freeConnections.has(mock)).to.be.false;
                 });
         });
     });
@@ -137,8 +137,8 @@ describe('Pool', function () {
 
             const mock = new PoolConnectionMock(instance);
 
-            instance._connections.push(mock);
-            instance._freeConnections.push(mock);
+            instance.$add(instance._connections,     mock);
+            instance.$add(instance._freeConnections, mock);
 
             const stub       = this.sandbox.stub(instance, '$connectConnection').resolves(new PoolConnectionMock(instance));
             const connection = yield instance.getConnection();
@@ -154,8 +154,8 @@ describe('Pool', function () {
 
             const mock = new PoolConnectionMock(instance);
 
-            instance._connections.push(mock);
-            instance._busyConnections.push(mock);
+            instance.$add(instance._connections,     mock);
+            instance.$add(instance._busyConnections, mock);
 
             const promise = instance.getConnection();
 
@@ -172,8 +172,8 @@ describe('Pool', function () {
             return instance
                 .query('SELECT 1;')
                 .then(() => {
-                    expect(instance._connections).to.not.be.empty;
-                    expect(instance._freeConnections).to.not.be.empty;
+                    expect(instance._connections.size).to.be.above(0);
+                    expect(instance._freeConnections.size).to.be.above(0);
                 });
         });
 
@@ -182,9 +182,9 @@ describe('Pool', function () {
 
             const promise = instance.query('SELECT 1;');
 
-            expect(instance._connections).to.have.lengthOf(1);
-            expect(instance._busyConnections).to.have.lengthOf(1);
-            expect(instance._freeConnections).to.be.empty;
+            expect(instance._connections.size).to.be.equal(1);
+            expect(instance._busyConnections.size).to.be.equal(1);
+            expect(instance._freeConnections.size).to.be.equal(0);
 
             return promise;
         });
@@ -225,7 +225,7 @@ describe('Pool', function () {
             promises.push(instance.query('SELECT 2;'));
             promises.push(instance.query('SELECT 3;'));
 
-            expect(instance._queryQueue).to.have.lengthOf(1);
+            expect(instance._queryQueue.size).to.be.equal(1);
 
             return Promise.all(promises);
         });
@@ -242,7 +242,7 @@ describe('Pool', function () {
             promises.push(instance.query('SELECT 2;'));
             promises.push(instance.query('SELECT 3;'));
 
-            expect(instance._queryQueue).to.have.lengthOf(1);
+            expect(instance._queryQueue.size).to.be.equal(1);
 
             return Promise
                 .all(promises)
@@ -258,16 +258,15 @@ describe('Pool', function () {
 
             const mock = new PoolConnectionMock(instance);
 
-            instance._connections.push(mock);
-            instance._freeConnections.push(mock);
+            instance.$add(instance._connections,     mock);
+            instance.$add(instance._freeConnections, mock);
 
             return instance
                 .releaseConnection(mock)
                 .then(() => {
-                    expect(instance._busyConnections).to.be.empty;
-
-                    expect(instance._connections).to.have.lengthOf(1);
-                    expect(instance._freeConnections).to.have.lengthOf(1);
+                    expect(instance._connections.size).to.be.equal(1);
+                    expect(instance._busyConnections.size).to.be.equal(0);
+                    expect(instance._freeConnections.size).to.be.equal(1);
                 });
         });
     });
@@ -278,16 +277,15 @@ describe('Pool', function () {
 
             const mock = new PoolConnectionMock(instance);
 
-            instance._connections.push(mock);
-            instance._freeConnections.push(mock);
+            instance.$add(instance._connections,     mock);
+            instance.$add(instance._freeConnections, mock);
 
             return instance
                 ._purgeConnection(mock)
                 .then(() => {
-                    expect(instance._busyConnections).to.be.empty;
-
-                    expect(instance._connections).to.be.empty;
-                    expect(instance._freeConnections).to.be.empty;
+                    expect(instance._connections.size).to.be.equal(0);
+                    expect(instance._busyConnections.size).to.be.equal(0);
+                    expect(instance._freeConnections.size).to.be.equal(0);
                 });
         });
     });

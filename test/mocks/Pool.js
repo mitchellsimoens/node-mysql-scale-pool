@@ -16,14 +16,14 @@ class PoolMock extends Pool {
 			config : connectionConfig
 		});
 
-		this._connections.push(connection);
+        this.$add(this._connections, connection);
 
 		return connection;
 	}
 
     $connectConnection (connection) {
         return new Promise(resolve => {
-            this._busyConnections.push(connection);
+            this.$add(this._busyConnections, connection);
 
             setTimeout(() => {
                 this.$releaseConnection(connection);

@@ -20,34 +20,35 @@ class Pool {
 
 		this._connectionConfig = new ConnectionConfig(this.connectionConfig);
 
-		//TODO maybe use Map?
 		/**
 		 * Holds all connections that have been created.
 		 */
-		this._connections     = [];
+		this._connections     = new Set();
 		/**
 		 * Holds connections that are busy. This is connection either
 		 * connecting or querying.
 		 */
-		this._busyConnections = [];
+		this._busyConnections = new Set();
 		/**
 		 * Holds connections that are free to use meaning the connection
 		 * has connected but is not querying.
 		 */
-		this._freeConnections = [];
+		this._freeConnections = new Set();
 		/**
 		 * Holds queries that are queued when there are no free connections.
 		 */
-		this._queryQueue = [];
+		this._queryQueue = new Set();
 	}
 
 	end () {
+		let promises = [];
+
+		for (let connection of this._connections) {
+			promises.push(this.$endConnection(connection));
+		}
+
 		return Promise
-			.all(
-				this._connections.map(
-					this.$endConnection.bind(this)
-				)
-			)
+			.all(promises)
 			.then(this.$onEnd.bind(this));
 	}
 
@@ -57,12 +58,12 @@ class Pool {
 				return reject(new Error('This pool is closed'));
 			}
 
-			if (this._freeConnections.length) {
-				let connection = this._freeConnections.shift();
+			if (this._freeConnections.size) {
+				let connection = this.$first(this._freeConnections);
 
 				resolve(connection);
 			} else {
-				if (this._connections.length < this.maxConnectionLimit) {
+				if (this._connections.size < this.maxConnectionLimit) {
 					const connection = this.$createConnection();
 
 					this
@@ -84,14 +85,14 @@ class Pool {
 		return new Promise((resolve, reject) => {
 			if (this._closed) {
 				reject(new Error('This pool is closed'));
-			} else if (this._freeConnections.length === 0 && this._connections.length >= this.maxConnectionLimit) {
-				if (!this.queueLimit || this._queryQueue.length < this.queueLimit) {
-					this._queryQueue.push({
+			} else if (this._freeConnections.size === 0 && this._connections.size >= this.maxConnectionLimit) {
+				if (!this.queueLimit || this._queryQueue.size < this.queueLimit) {
+					this.$add(this._queryQueue, {
 						reject,
 						resolve,
 						sql,
 						values
-					});
+					}, true);
 				} else {
 					reject(new Error('Query queue is full'));
 				}
@@ -124,7 +125,7 @@ class Pool {
 			config : connectionConfig
 		});
 
-		this._connections.push(connection);
+		this.$add(this._connections, connection);
 
 		return connection;
 	}
@@ -200,7 +201,7 @@ class Pool {
 				}
 			});
 
-			this._busyConnections.push(connection);
+			this.$add(this._busyConnections, connection);
 
 			//release the connection when a query ends
 			query.once('end', this.$releaseConnection.bind(this, connection));
@@ -211,14 +212,11 @@ class Pool {
 
 	$releaseConnection (connection) {
 		if (!this._closed) {
-			this.$remove(this._busyConnections, connection);
+			this.$remove(this._busyConnections, connection)
+				.$add(this._freeConnections, connection);
 
-			if (this._freeConnections.indexOf(connection) < 0) {
-				this._freeConnections.push(connection);
-			}
-
-			if (this._freeConnections.length > 0 && this._queryQueue.length) {
-				const item = this._queryQueue.shift();
+			if (this._freeConnections.size > 0 && this._queryQueue.size) {
+				const item = this.$first(this._queryQueue);
 
 				this
 					.query(item.sql, item.values)
@@ -231,20 +229,37 @@ class Pool {
 
 	$removeConnection (connection) {
 		if (!this._closed) {
-			this.$remove(this._busyConnections, connection);
-			this.$remove(this._freeConnections, connection);
-			this.$remove(this._connections,     connection);
+			this.$remove(this._busyConnections, connection)
+				.$remove(this._freeConnections, connection)
+				.$remove(this._connections,     connection);
 		}
 
 		return connection;
 	}
 
-	$remove (arr, connection) {
-		const idx = arr.indexOf(connection);
+	$first (set, remove = true) {
+		const values = set.values();
+        const item   = values.next().value;
 
-		if (idx >= 0) {
-			arr.splice(idx, 1);
+		if (remove) {
+			set.delete(item);
 		}
+
+		return item;
+	}
+
+	$add (set, connection, skipCheck = false) {
+		if (skipCheck || !set.has(connection)) {
+			set.add(connection);
+		}
+
+		return this;
+	}
+
+	$remove (set, connection) {
+		set.delete(connection);
+
+		return this;
 	}
 }
 
