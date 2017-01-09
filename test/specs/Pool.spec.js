@@ -15,7 +15,7 @@ describe('Pool', function () {
         instance = null;
 
         if (temp && !temp.$closed) {
-            return temp.end();
+            return temp.destroy();
         }
     });
 
@@ -324,6 +324,85 @@ describe('Pool', function () {
                     expect(instance.$busyConnections.size).to.be.equal(0);
                     expect(instance.$freeConnections.size).to.be.equal(0);
                 });
+        });
+    });
+
+    describe('$onScaleInterval', function () {
+        it('should scale down connection has not been queried', function (done) {
+            instance = new Pool({
+                connectionDecay : 10,
+                scaleInterval   : 20
+            });
+
+            const mock = new PoolConnectionMock(instance);
+
+            instance.$add(instance.$connections,     mock);
+            instance.$add(instance.$freeConnections, mock);
+
+            expect(instance.$connections.size).to.be.equal(1);
+            expect(instance.$freeConnections.size).to.be.equal(1);
+
+            setTimeout(() => {
+                expect(instance.$connections.size).to.be.equal(0);
+                expect(instance.$busyConnections.size).to.be.equal(0);
+                expect(instance.$freeConnections.size).to.be.equal(0);
+
+                done();
+            }, 30);
+        });
+
+        it('should scale down connection that has been queried', function (done) {
+            instance = new Pool({
+                connectionDecay : 10,
+                scaleInterval   : 20
+            });
+
+            const mock = new PoolConnectionMock(instance);
+
+            mock.$lastQuery = new Date().getTime();
+
+            instance.$add(instance.$connections,     mock);
+            instance.$add(instance.$freeConnections, mock);
+
+            expect(instance.$connections.size).to.be.equal(1);
+            expect(instance.$freeConnections.size).to.be.equal(1);
+
+            setTimeout(() => {
+                expect(instance.$connections.size).to.be.equal(0);
+                expect(instance.$busyConnections.size).to.be.equal(0);
+                expect(instance.$freeConnections.size).to.be.equal(0);
+
+                done();
+            }, 30);
+        });
+
+        it('should not scale down connection', function (done) {
+            instance = new Pool({
+                connectionDecay : 10,
+                scaleInterval   : 20
+            });
+
+            const mock1 = new PoolConnectionMock(instance);
+            const mock2 = new PoolConnectionMock(instance);
+
+            mock1.$lastQuery = new Date().getTime();
+            mock2.$lastQuery = new Date().getTime() + 20;
+
+            instance.$add(instance.$connections,     mock1);
+            instance.$add(instance.$freeConnections, mock1);
+            instance.$add(instance.$connections,     mock2);
+            instance.$add(instance.$freeConnections, mock2);
+
+            expect(instance.$connections.size).to.be.equal(2);
+            expect(instance.$freeConnections.size).to.be.equal(2);
+
+            setTimeout(() => {
+                expect(instance.$connections.size).to.be.equal(1);
+                expect(instance.$busyConnections.size).to.be.equal(0);
+                expect(instance.$freeConnections.size).to.be.equal(1);
+
+                done();
+            }, 30);
         });
     });
 });
