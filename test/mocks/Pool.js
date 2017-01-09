@@ -6,7 +6,7 @@ const PoolConnection   = require('./PoolConnection');
 
 class PoolMock extends Pool {
     $createConnection () {
-		let config           = this._connectionConfig,
+		let config           = this.$connectionConfig,
 			connectionConfig = new ConnectionConfig(config);
 
 		connectionConfig.clientFlags   = config.clientFlags;
@@ -16,14 +16,14 @@ class PoolMock extends Pool {
 			config : connectionConfig
 		});
 
-        this.$add(this._connections, connection);
+        this.$add(this.$connections, connection);
 
 		return connection;
 	}
 
     $connectConnection (connection) {
         return new Promise(resolve => {
-            this.$add(this._busyConnections, connection);
+            this.$add(this.$busyConnections, connection);
 
             setTimeout(() => {
                 this.$releaseConnection(connection);

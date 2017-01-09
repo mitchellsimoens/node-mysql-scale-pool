@@ -20,26 +20,26 @@ class Pool {
 
 		Object.assign(this, configDefaults, config);
 
-		this._connectionConfig = new ConnectionConfig(this.connectionConfig);
+		this.$connectionConfig = new ConnectionConfig(this.connectionConfig);
 
 		/**
 		 * Holds all connections that have been created.
 		 */
-		this._connections     = new Set();
+		this.$connections     = new Set();
 		/**
 		 * Holds connections that are busy. This is connection either
 		 * connecting or querying.
 		 */
-		this._busyConnections = new Set();
+		this.$busyConnections = new Set();
 		/**
 		 * Holds connections that are free to use meaning the connection
 		 * has connected but is not querying.
 		 */
-		this._freeConnections = new Set();
+		this.$freeConnections = new Set();
 		/**
 		 * Holds queries that are queued when there are no free connections.
 		 */
-		this._queryQueue = new Set();
+		this.$queryQueue = new Set();
 
 		if (this.scaleInterval && this.connectionDecay) {
 			this.$scaleInterval = setInterval(this.$onScaleInterval.bind(this), this.scaleInterval);
@@ -49,7 +49,7 @@ class Pool {
 	end () {
 		let promises = [];
 
-		for (let connection of this._connections) {
+		for (let connection of this.$connections) {
 			promises.push(this.$endConnection(connection));
 		}
 
@@ -61,7 +61,7 @@ class Pool {
 	destroy () {
 		let promises = [];
 
-		for (let connection of this._connections) {
+		for (let connection of this.$connections) {
 			promises.push(this.$destroyConnection(connection));
 		}
 
@@ -76,12 +76,12 @@ class Pool {
 				return reject(new Error('This pool is closed'));
 			}
 
-			if (this._freeConnections.size) {
-				let connection = this.$first(this._freeConnections);
+			if (this.$freeConnections.size) {
+				let connection = this.$first(this.$freeConnections);
 
 				resolve(connection);
 			} else {
-				if (this._connections.size < this.maxConnectionLimit) {
+				if (this.$connections.size < this.maxConnectionLimit) {
 					const connection = this.$createConnection();
 
 					this
@@ -103,9 +103,9 @@ class Pool {
 		return new Promise((resolve, reject) => {
 			if (this._closed) {
 				reject(new Error('This pool is closed'));
-			} else if (this._freeConnections.size === 0 && this._connections.size >= this.maxConnectionLimit) {
-				if (!this.queueLimit || this._queryQueue.size < this.queueLimit) {
-					this.$add(this._queryQueue, {
+			} else if (this.$freeConnections.size === 0 && this.$connections.size >= this.maxConnectionLimit) {
+				if (!this.queueLimit || this.$queryQueue.size < this.queueLimit) {
+					this.$add(this.$queryQueue, {
 						reject,
 						resolve,
 						sql,
@@ -133,7 +133,7 @@ class Pool {
 	}
 
 	$createConnection () {
-		let config           = this._connectionConfig,
+		let config           = this.$connectionConfig,
 			connectionConfig = new ConnectionConfig(config);
 
 		connectionConfig.clientFlags   = config.clientFlags;
@@ -143,14 +143,14 @@ class Pool {
 			config : connectionConfig
 		});
 
-		this.$add(this._connections, connection);
+		this.$add(this.$connections, connection);
 
 		return connection;
 	}
 
 	$connectConnection (connection) {
 		return new Promise((resolve, reject) => {
-			this._busyConnections.push(connection);
+			this.$add(this.$busyConnections, connection);
 
 			connection.connect(
 				{
@@ -175,21 +175,20 @@ class Pool {
 		this._closed = true;
 
 		this
-			.$clear(this._connections)
-			.$clear(this._busyConnections)
-			.$clear(this._freeConnections)
-			.$clear(this._queryQueue);
-
-		this._connectionConfig    =
-			this._connections     =
-			this._busyConnections =
-			this._freeConnections =
-			this._queryQueue      =
+			.$clear(this.$connections)
+			.$clear(this.$busyConnections)
+			.$clear(this.$freeConnections)
+			.$clear(this.$queryQueue);
 
 		if (this.$scaleInterval) {
 			clearInterval(this.$scaleInterval);
 		}
 
+		this.$connectionConfig    =
+			this.$connections     =
+			this.$busyConnections =
+			this.$freeConnections =
+			this.$queryQueue      =
 			this.$scaleInterval   =
 			null;
 
@@ -200,7 +199,7 @@ class Pool {
 		return connection
 			.release()
 			.then(connection => {
-				connection.end();
+				connection.release();
 
 				return connection;
 			});
@@ -241,7 +240,7 @@ class Pool {
 				}
 			});
 
-			this.$add(this._busyConnections, connection);
+			this.$add(this.$busyConnections, connection);
 
 			//release the connection when a query ends
 			query.once('end', this.$releaseConnection.bind(this, connection));
@@ -254,11 +253,11 @@ class Pool {
 
 	$releaseConnection (connection) {
 		if (!this._closed) {
-			this.$remove(this._busyConnections, connection)
-				.$add(this._freeConnections, connection);
+			this.$remove(this.$busyConnections, connection)
+				.$add(this.$freeConnections, connection);
 
-			if (this._freeConnections.size > 0 && this._queryQueue.size) {
-				const item = this.$first(this._queryQueue);
+			if (this.$freeConnections.size > 0 && this.$queryQueue.size) {
+				const item = this.$first(this.$queryQueue);
 
 				this
 					.query(item.sql, item.values)
@@ -271,9 +270,9 @@ class Pool {
 
 	$removeConnection (connection) {
 		if (!this._closed) {
-			this.$remove(this._busyConnections, connection)
-				.$remove(this._freeConnections, connection)
-				.$remove(this._connections,     connection);
+			this.$remove(this.$busyConnections, connection)
+				.$remove(this.$freeConnections, connection)
+				.$remove(this.$connections,     connection);
 		}
 
 		return connection;
