@@ -188,9 +188,6 @@ class Pool {
 		return connection
 			.release()
 			.then(connection => {
-				if (typeof connection.end !== 'function') {
-					console.log(connection);
-				}
 				connection.end();
 
 				return connection;
