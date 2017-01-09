@@ -5,11 +5,13 @@ const ConnectionConfig = require('mysql/lib/ConnectionConfig');
 const PoolConnection   = require('mysql/lib/PoolConnection');
 
 const configDefaults = {
-	acquireTimeout     : 10000, //10 seconds
+	acquireTimeout     : 10000, // 10 seconds
 	connectionConfig   : {},
+	connectionDecay    : 300000, // 5 minutes
 	maxConnectionLimit : 10,
 	minConnectionLimit : 0,
-	queueLimit         : 0
+	queueLimit         : 0,
+	scaleInterval      : 300000 // 5 minutes
 };
 
 class Pool {
@@ -38,6 +40,10 @@ class Pool {
 		 * Holds queries that are queued when there are no free connections.
 		 */
 		this._queryQueue = new Set();
+
+		if (this.scaleInterval && this.connectionDecay) {
+			this.$scaleInterval = setInterval(this.$onScaleInterval.bind(this), this.scaleInterval);
+		}
 	}
 
 	end () {
@@ -179,6 +185,12 @@ class Pool {
 			this._busyConnections =
 			this._freeConnections =
 			this._queryQueue      =
+
+		if (this.$scaleInterval) {
+			clearInterval(this.$scaleInterval);
+		}
+
+			this.$scaleInterval   =
 			null;
 
 		return arg;
@@ -234,6 +246,8 @@ class Pool {
 			//release the connection when a query ends
 			query.once('end', this.$releaseConnection.bind(this, connection));
 
+			connection.$lastQuery = new Date().getTime();
+
 			connection.query(query);
 		});
 	}
@@ -263,6 +277,46 @@ class Pool {
 		}
 
 		return connection;
+	}
+
+	$onScaleInterval () {
+		const decay = this.connectionDecay;
+
+		if (decay) {
+			const purgable = [];
+			const now      = new Date().getTime();
+
+			this.$freeConnections.forEach(connection => {
+				const lastQuery = connection.$lastQuery;
+
+				if (!lastQuery || now - lastQuery >= decay) {
+					purgable.push(connection);
+				}
+			});
+
+			const num = purgable.length;
+
+			if (num) {
+				if (this.$connections.size - num < this.minConnectionLimit) {
+					const newNum = this.$connections.size - this.minConnectionLimit;
+
+					purgable.sort((a, b) => a.$lastQuery - b.$lastQuery);
+
+					purgable.splice(
+						newNum,
+						purgable.length - newNum
+					);
+				}
+
+				if (purgable.length) {
+					purgable.forEach((connection) => {
+						this.$removeConnection(connection);
+
+						connection.destroy();
+					});
+				}
+			}
+		}
 	}
 
 	$first (set, remove = true) {

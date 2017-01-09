@@ -122,6 +122,7 @@ describe('Pool', function () {
                     expect(instance._busyConnections).to.be.null;
                     expect(instance._freeConnections).to.be.null;
                     expect(instance._queryQueue).to.be.null;
+                    expect(instance.$scaleInterval).to.be.null;
                 });
         });
 
