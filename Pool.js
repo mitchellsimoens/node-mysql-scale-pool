@@ -1,6 +1,5 @@
 'use strict';
 
-const mysql            = require('mysql');
 const Connection       = require('mysql/lib/Connection');
 const ConnectionConfig = require('mysql/lib/ConnectionConfig');
 const PoolConnection   = require('mysql/lib/PoolConnection');
@@ -42,7 +41,7 @@ class Pool {
 		this._queryQueue = [];
 	}
 
-	end (connection) {
+	end () {
 		return Promise
 			.all(
 				this._connections.map(

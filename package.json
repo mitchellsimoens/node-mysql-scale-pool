@@ -2,8 +2,9 @@
   "name": "node-mysql-scale-pool",
   "version": "1.0.0",
   "description": "An improved pool class to use with node-mysql that can scale connections.",
-  "main": "Pool.js",
+  "main": "index.js",
   "scripts": {
+    "eslint": "clear && eslint --config ./.eslintrc.json ./",
     "test": "clear && mocha --recursive 'test/**/*.spec.js'"
   },
   "author": "",
