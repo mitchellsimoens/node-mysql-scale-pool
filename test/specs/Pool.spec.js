@@ -89,7 +89,7 @@ describe('Pool', function () {
                 });
         });
 
-        it('should destroy connections', function () {
+        it('should remove connections', function () {
             instance = new Pool();
 
             const mock = new PoolConnectionMock(instance);
@@ -102,6 +102,42 @@ describe('Pool', function () {
 
             return instance
                 .end()
+                .then(() => {
+                    expect(connections.has(mock)).to.be.false;
+                    expect(freeConnections.has(mock)).to.be.false;
+                });
+        });
+    });
+
+    describe('destroy', function () {
+        it('should cleanup properties', function () {
+            instance = new Pool();
+
+            return instance
+                .destroy()
+                .then(() => {
+                    expect(instance._closed).to.be.true;
+                    expect(instance._connectionConfig).to.be.null;
+                    expect(instance._connections).to.be.null;
+                    expect(instance._busyConnections).to.be.null;
+                    expect(instance._freeConnections).to.be.null;
+                    expect(instance._queryQueue).to.be.null;
+                });
+        });
+
+        it('should remove connections', function () {
+            instance = new Pool();
+
+            const mock = new PoolConnectionMock(instance);
+
+            const connections     = instance._connections;
+            const freeConnections = instance._freeConnections;
+
+            instance.$add(connections,     mock);
+            instance.$add(freeConnections, mock);
+
+            return instance
+                .destroy()
                 .then(() => {
                     expect(connections.has(mock)).to.be.false;
                     expect(freeConnections.has(mock)).to.be.false;

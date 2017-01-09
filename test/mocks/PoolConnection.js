@@ -1,12 +1,16 @@
 'use strict';
 
-class PoolConnection {
+class PoolConnectionMock {
     constructor (pool) {
         if (!pool) {
             throw new Error('This mock PoolConnection requires a pool to be passed');
         }
 
         this._pool = pool;
+    }
+
+    end () {
+        this.release();
     }
 
     destroy () {
@@ -22,4 +26,4 @@ class PoolConnection {
     }
 }
 
-module.exports = PoolConnection;
+module.exports = PoolConnectionMock;

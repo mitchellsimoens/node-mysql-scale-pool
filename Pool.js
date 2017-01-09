@@ -52,6 +52,18 @@ class Pool {
 			.then(this.$onEnd.bind(this));
 	}
 
+	destroy () {
+		let promises = [];
+
+		for (let connection of this._connections) {
+			promises.push(this.$destroyConnection(connection));
+		}
+
+		return Promise
+			.all(promises)
+			.then(this.$onEnd.bind(this));
+	}
+
 	getConnection () {
 		return new Promise((resolve, reject) => {
 			if (this._closed) {
@@ -156,6 +168,12 @@ class Pool {
 	$onEnd (arg) {
 		this._closed = true;
 
+		this
+			.$clear(this._connections)
+			.$clear(this._busyConnections)
+			.$clear(this._freeConnections)
+			.$clear(this._queryQueue);
+
 		this._connectionConfig    =
 			this._connections     =
 			this._busyConnections =
@@ -167,6 +185,19 @@ class Pool {
 	}
 
 	$endConnection (connection) {
+		return connection
+			.release()
+			.then(connection => {
+				if (typeof connection.end !== 'function') {
+					console.log(connection);
+				}
+				connection.end();
+
+				return connection;
+			});
+	}
+
+	$destroyConnection (connection) {
 		return connection
 			.release()
 			.then(connection => {
@@ -252,6 +283,12 @@ class Pool {
 		if (skipCheck || !set.has(connection)) {
 			set.add(connection);
 		}
+
+		return this;
+	}
+
+	$clear (set) {
+		set.clear();
 
 		return this;
 	}
