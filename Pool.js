@@ -72,7 +72,7 @@ class Pool {
 
 	getConnection () {
 		return new Promise((resolve, reject) => {
-			if (this._closed) {
+			if (this.$closed) {
 				return reject(new Error('This pool is closed'));
 			}
 
@@ -101,7 +101,7 @@ class Pool {
 
 	query (sql, values) {
 		return new Promise((resolve, reject) => {
-			if (this._closed) {
+			if (this.$closed) {
 				reject(new Error('This pool is closed'));
 			} else if (this.$freeConnections.size === 0 && this.$connections.size >= this.maxConnectionLimit) {
 				if (!this.queueLimit || this.$queryQueue.size < this.queueLimit) {
@@ -159,7 +159,7 @@ class Pool {
 				(error) => {
 					this.$releaseConnection(connection);
 
-					if (this._closed) {
+					if (this.$closed) {
 						reject(new Error('This pool is closed'));
 					} else if (error) {
 						reject(error);
@@ -172,7 +172,7 @@ class Pool {
 	}
 
 	$onEnd (arg) {
-		this._closed = true;
+		this.$closed = true;
 
 		this
 			.$clear(this.$connections)
@@ -252,7 +252,7 @@ class Pool {
 	}
 
 	$releaseConnection (connection) {
-		if (!this._closed) {
+		if (!this.$closed) {
 			this.$remove(this.$busyConnections, connection)
 				.$add(this.$freeConnections, connection);
 
@@ -269,7 +269,7 @@ class Pool {
 	}
 
 	$removeConnection (connection) {
-		if (!this._closed) {
+		if (!this.$closed) {
 			this.$remove(this.$busyConnections, connection)
 				.$remove(this.$freeConnections, connection)
 				.$remove(this.$connections,     connection);

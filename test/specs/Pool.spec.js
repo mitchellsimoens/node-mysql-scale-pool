@@ -14,7 +14,7 @@ describe('Pool', function () {
 
         instance = null;
 
-        if (temp && !temp._closed) {
+        if (temp && !temp.$closed) {
             return temp.end();
         }
     });
@@ -80,7 +80,7 @@ describe('Pool', function () {
             return instance
                 .end()
                 .then(() => {
-                    expect(instance._closed).to.be.true;
+                    expect(instance.$closed).to.be.true;
                     expect(instance.$connectionConfig).to.be.null;
                     expect(instance.$connections).to.be.null;
                     expect(instance.$busyConnections).to.be.null;
@@ -116,7 +116,7 @@ describe('Pool', function () {
             return instance
                 .destroy()
                 .then(() => {
-                    expect(instance._closed).to.be.true;
+                    expect(instance.$closed).to.be.true;
                     expect(instance.$connectionConfig).to.be.null;
                     expect(instance.$connections).to.be.null;
                     expect(instance.$busyConnections).to.be.null;
@@ -160,7 +160,7 @@ describe('Pool', function () {
         it('should handle when a pool is closed', function () {
             instance = new Pool();
 
-            instance._closed = true;
+            instance.$closed = true;
 
             const promise = instance.getConnection();
 
