@@ -12,7 +12,7 @@ const configDefaults = {
 	connectionDecay    : 300000, // 5 minutes
 	maxConnectionLimit : 10,
 	minConnectionLimit : 0,
-	queueLimit         : 0,
+	queueLimit         : Infinity,
 	scaleInterval      : 300000 // 5 minutes
 };
 
@@ -123,7 +123,7 @@ class Pool {
 				 * We have no free connections to work with and have reached the
 				 * maxConnectionLimit so we have to see if we can queue the query.
 				 */
-				if (!this.queueLimit || this.$queryQueue.size < this.queueLimit) {
+				if (this.$queryQueue.size < this.queueLimit) {
 					/**
 					 * Great, we can queue the query. This will then be run
 					 * and resolved/rejected when a connection is released.

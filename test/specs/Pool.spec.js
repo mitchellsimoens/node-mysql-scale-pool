@@ -36,7 +36,7 @@ describe('Pool', function () {
             expect(instance).to.have.property('acquireTimeout',     10000);
             expect(instance).to.have.property('maxConnectionLimit', 10);
             expect(instance).to.have.property('minConnectionLimit', 0);
-            expect(instance).to.have.property('queueLimit',         0);
+            expect(instance).to.have.property('queueLimit',         Infinity);
 
             expect(instance.connectionConfig).to.be.an('object');
             expect(instance.connectionConfig).to.be.empty;
@@ -52,7 +52,7 @@ describe('Pool', function () {
             expect(instance).to.have.property('acquireTimeout',     10000);
             expect(instance).to.have.property('maxConnectionLimit', 20);
             expect(instance).to.have.property('minConnectionLimit', 5);
-            expect(instance).to.have.property('queueLimit',         0);
+            expect(instance).to.have.property('queueLimit',         Infinity);
 
             expect(instance.connectionConfig).to.be.an('object');
             expect(instance.connectionConfig).to.be.empty;
