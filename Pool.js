@@ -77,24 +77,33 @@ class Pool {
 			}
 
 			if (this.$freeConnections.size) {
+				/**
+				 * We have free connections, use one.
+				 */
 				let connection = this.$first(this.$freeConnections);
 
 				resolve(connection);
+			} else if (this.$connections.size < this.maxConnectionLimit) {
+				/**
+				 * We have no free connections and we haven't reached
+				 * the maxConnectionLimit so create one.
+				 */
+				const connection = this.$createConnection();
+
+				this
+					.$connectConnection(connection)
+					.then(resolve)
+					.catch((error) => {
+						this.$removeConnection(connection);
+
+						reject(error);
+					});
 			} else {
-				if (this.$connections.size < this.maxConnectionLimit) {
-					const connection = this.$createConnection();
-
-					this
-						.$connectConnection(connection)
-						.then(resolve)
-						.catch((error) => {
-							this.$removeConnection(connection);
-
-							reject(error);
-						});
-				} else {
-					reject(new Error('No connections available'));
-				}
+				/**
+				 * We reached the maxConnectionLimit so we cannot
+				 * create a new one.
+				 */
+				reject(new Error('No connections available'));
 			}
 		});
 	}
@@ -104,7 +113,15 @@ class Pool {
 			if (this.$closed) {
 				reject(new Error('This pool is closed'));
 			} else if (this.$freeConnections.size === 0 && this.$connections.size >= this.maxConnectionLimit) {
+				/**
+				 * We have no free connections to work with and have reached the
+				 * maxConnectionLimit so we have to see if we can queue the query.
+				 */
 				if (!this.queueLimit || this.$queryQueue.size < this.queueLimit) {
+					/**
+					 * Great, we can queue the query. This will then be run
+					 * and resolved/rejected when a connection is released.
+					 */
 					this.$add(this.$queryQueue, {
 						reject,
 						resolve,
@@ -112,9 +129,16 @@ class Pool {
 						values
 					}, true);
 				} else {
+					/**
+					 * Hopefully this never happens. We cannot queue a query and will fail
+					 * the attempt.
+					 */
 					reject(new Error('Query queue is full'));
 				}
 			} else {
+				/**
+				 * All is good in the world, let's get a connection and execute the query.
+				 */
 				this
 					.getConnection()
 					.then(connection => this.$query(connection, sql, values))
@@ -297,6 +321,11 @@ class Pool {
 
 			if (num) {
 				if (this.$connections.size - num < this.minConnectionLimit) {
+					/**
+					 * This would have caused the number of connections to be
+					 * below the minConnectionLimit. We need to purge only
+					 * the number of connections to get us to the minConnectionLimit.
+					 */
 					const newNum = this.$connections.size - this.minConnectionLimit;
 
 					purgable.sort((a, b) => a.$lastQuery - b.$lastQuery);
