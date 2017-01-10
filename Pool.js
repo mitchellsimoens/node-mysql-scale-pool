@@ -223,20 +223,14 @@ class Pool {
 		return connection
 			.release()
 			.then(connection => {
-				connection.release();
+				connection.destroy();
 
 				return connection;
 			});
 	}
 
 	$destroyConnection (connection) {
-		return connection
-			.release()
-			.then(connection => {
-				connection.destroy();
-
-				return connection;
-			});
+		return connection.destroy();
 	}
 
 	$createQuery (sql, values, callback) {
