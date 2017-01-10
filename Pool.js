@@ -5,14 +5,66 @@ const ConnectionConfig = require('mysql/lib/ConnectionConfig');
 const PoolConnection   = require('mysql/lib/PoolConnection');
 
 const configDefaults = {
+	/**
+	 * @cfg {Number} [acquireTimeout=10000] The number of milliseconds
+	 * for a connection to connect to the database till it timesout.
+	 */
 	acquireTimeout     : 10000, // 10 seconds
+	/**
+	 * @cfg {Boolean} [bufferOnConstruct=true] Whether connections should
+	 * be buffered when the pool is constructing.
+	 *
+	 * This would allow connections to be ready and connected when queries
+	 * are executing instead of connecting when a query executes.
+	 *
+	 * Please see {@link #connectionBuffer} for the number of connections
+	 * that will be created.
+	 */
 	bufferOnConstruct  : true,
+	/**
+	 * @cfg {Number} [connectionBuffer=5] The number of connections to have
+	 * buffered to be available for a query.
+	 */
 	connectionBuffer   : 5,
+	/**
+	 * @Cfg {Object} [connectionConfig={}] The connection configurations
+	 * passed to the PoolConnection. For valid options, please see the
+	 * [mysql](https://www.npmjs.com/package/mysql#connection-options) module.
+	 */
 	connectionConfig   : {},
+	/**
+	 * @cfg {Number} [connectionDecay=300000] The number of milliseconds since
+	 * the last query a connection has executed when the number of connections
+	 * is scaling down. If a query has not executed within this period, it is deemed
+	 * unnecessary and will be closed.
+	 *
+	 * Please see {@link #scaleInterval} for the interval this will be checked.
+	 */
 	connectionDecay    : 300000, // 5 minutes
+	/**
+	 * @cfg {Number} [maxConnectionLimit=10] The number of connections to be the
+	 * max number of connections that can be created. Buffering or querying will
+	 * never create a connection once this limit has been reached. If no limit is
+	 * wanted (not recommended), this can be set to `Infinity`.
+	 */
 	maxConnectionLimit : 10,
+	/**
+	 * @cfg {Number} [minConnectionLimit=0] The minimum umber of connections that
+	 * should be created. This is only used when connections are being scaled down.
+	 */
 	minConnectionLimit : 0,
+	/**
+	 * @cfg {Number} [queueLimit=Infinity] The maximum number of queries that can be queued.
+	 */
 	queueLimit         : Infinity,
+	/**
+	 * @cfg {Number} [scaleInterval=300000] The number of milliseconds to check the
+	 * number of connections in order to scale down connections that have not been
+	 * queried for a while.
+	 *
+	 * Please see {@link #connectionDecay} for the timeframe a connection is deemed
+	 * unnecessary.
+	 */
 	scaleInterval      : 300000 // 5 minutes
 };
 
@@ -52,6 +104,13 @@ class Pool {
 		}
 	}
 
+	/**
+	 * Gracefully closes and removes all connections from this pool.
+	 *
+	 * For non-graceful closing, please see the {@link #destroy} method.
+	 *
+	 * @returns {Promise}
+	 */
 	end () {
 		let promises = [];
 
@@ -64,6 +123,13 @@ class Pool {
 			.then(this.$onEnd.bind(this));
 	}
 
+	/**
+	 * Forces all connections to be closed from this pool.
+	 *
+	 * For graceful closing, please see the {@link #end} method.
+	 *
+	 * @returns {Promise}
+	 */
 	destroy () {
 		let promises = [];
 
@@ -76,6 +142,15 @@ class Pool {
 			.then(this.$onEnd.bind(this));
 	}
 
+	/**
+	 * Returns a connection that is currently free of any queries.
+	 * If no connections are free and the {@link #maxConnectionLimit}
+	 * has not been reached, a connection will be created and connected to.
+	 *
+	 * @param {Boolean} [fromBuffer=false] Whether a connection is being retrieved
+	 * from a buffer. This will be used for an event.
+	 * @returns {Promise}
+	 */
 	getConnection (fromBuffer = false) {
 		return new Promise((resolve, reject) => {
 			if (this.$closed) {
@@ -114,6 +189,16 @@ class Pool {
 		});
 	}
 
+	/**
+	 * @param {String} sql The SQL statement to run.
+	 * @param {Array} values The values to replace in the placeholders
+	 * in the SQL statement.
+	 *
+	 * See [Performing Queries](https://www.npmjs.com/package/mysql#performing-queries)
+	 * for more on querying.
+	 *
+	 * @returns {Promise}
+	 */
 	query (sql, values) {
 		return new Promise((resolve, reject) => {
 			if (this.$closed) {
@@ -160,14 +245,36 @@ class Pool {
 		});
 	}
 
+	/**
+	 * @private
+	 * Release a connection. This is executed when a connection is ended.
+	 *
+	 * @param {PoolConnection} connection The connection that has been ended.
+	 *
+	 * @returns {Promise}
+	 */
 	releaseConnection (connection) {
 		return new Promise(resolve => resolve(this.$releaseConnection(connection)));
 	}
 
+	/**
+	 * @private
+	 * Removes a connection when it has been destroyed.
+	 *
+	 * @param {PoolConnection} connection The connection that has been ended.
+	 *
+	 * @returns {Promise}
+	 */
 	_purgeConnection (connection) {
 		return new Promise(resolve => resolve(this.$removeConnection(connection)));
 	}
 
+	/**
+	 * @private
+	 * Create a connection using {@link #connectionConfig}.
+	 *
+	 * @returns {PoolConnection}
+	 */
 	$createConnection () {
 		let config           = this.$connectionConfig,
 			connectionConfig = new ConnectionConfig(config);
@@ -184,6 +291,12 @@ class Pool {
 		return connection;
 	}
 
+	/**
+	 * @private
+	 * Triggers a connection to open a socket to the database.
+	 *
+	 * @returns {PoolConnection}
+	 */
 	$connectConnection (connection) {
 		return new Promise((resolve, reject) => {
 			this.$add(this.$busyConnections, connection);
@@ -207,6 +320,14 @@ class Pool {
 		});
 	}
 
+	/**
+	 * Handler to cleanup when a pool has been ended either from the
+	 * {@link #end} or {@link #destroy} methods from being executed.
+	 *
+	 * @param {*} arg Any argument possibly from a promise.
+	 *
+	 * @returns {*} The argument that was passed to this method.
+	 */
 	$onEnd (arg) {
 		this.$closed = true;
 
@@ -231,6 +352,12 @@ class Pool {
 		return arg;
 	}
 
+	/**
+	 * @private
+	 * Gracefully releases and then destroys the connection.
+	 *
+	 * @returns {Promise}
+	 */
 	$endConnection (connection) {
 		return connection
 			.release()
@@ -241,10 +368,27 @@ class Pool {
 			});
 	}
 
+	/**
+	 * @private
+	 * Non-gracefully destroys a connection.
+	 *
+	 * @returns {Promise}
+	 */
 	$destroyConnection (connection) {
 		return connection.destroy();
 	}
 
+	/**
+	 * @private
+	 * Creates the `Query` instance that will be executed by the `PoolConnection`.
+	 *
+	 * @param {String} sql The SQL statement to run.
+	 * @param {Array} values The values to replace in the placeholders
+	 * in the SQL statement.
+	 * @param {Function} callback The callback function when the query has been executed.
+	 *
+	 * @returns {Query}
+	 */
 	$createQuery (sql, values, callback) {
 		const query = Connection.createQuery(sql, values, callback);
 
@@ -260,6 +404,17 @@ class Pool {
 		return query;
 	}
 
+	/**
+	 * @private
+	 * Do the actual querying.
+	 *
+	 * @param {PoolConnection} connection The connection that will execute the query.
+	 * @param {String} sql The SQL statement to run.
+	 * @param {Array} values The values to replace in the placeholders
+	 * in the SQL statement.
+	 *
+	 * @returns {Promise}
+	 */
 	$query (connection, sql, values) {
 		return new Promise((resolve, reject) => {
 			const query = this.$createQuery(sql, values, (error, results) => {
@@ -278,6 +433,14 @@ class Pool {
 		});
 	}
 
+	/**
+	 * Releases a connection from being busy to being free.
+	 *
+	 * This will also check if there is a queued query.
+	 *
+	 * @param {PoolConnection} connection
+	 * @returns {PoolConnection}
+	 */
 	$releaseConnection (connection) {
 		if (!this.$closed) {
 			this.$remove(this.$busyConnections, connection)
@@ -295,6 +458,14 @@ class Pool {
 		return connection;
 	}
 
+	/**
+	 * @private
+	 * Marks a connection as being busy either from a query or
+	 * the connection is connecting.
+	 *
+	 * @param {PoolConnection} connection
+	 * @returns {PoolConnection}
+	 */
 	$useConnection (connection) {
 		if (!this.$closed) {
 			this.$remove(this.$freeConnections, connection)
@@ -304,6 +475,13 @@ class Pool {
 		return connection;
 	}
 
+	/**
+	 * @private
+	 * Removes a connection from this pool.
+	 *
+	 * @param {PoolConnection} connection
+	 * @returns {PoolConnection}
+	 */
 	$removeConnection (connection) {
 		if (!this.$closed) {
 			this.$remove(this.$busyConnections, connection)
@@ -314,6 +492,16 @@ class Pool {
 		return connection;
 	}
 
+	/**
+	 * @private
+	 * Determines if connections can be made to be buffered. This means
+	 * connections will be free for the next query execution.
+	 *
+	 * The number of connections will be determined from the {@link #connectionBuffer}
+	 * config along with making sure the number of connections does not go above
+	 * the {@link #maxConnectionLimit} and checking the number of connections
+	 * already free.
+	 */
 	$maybeBufferConnection () {
 		let buffer = this.connectionBuffer;
 
@@ -331,11 +519,27 @@ class Pool {
 					promises.push(this.getConnection(true));
 				}
 
+				/**
+				 * Capture any connection rejections in the case a connection
+				 * could not connect to the database. We could turn around and
+				 * execute this $maybeBufferConnection method to try again, however,
+				 * this could end up in an endless loop if a database is down.
+				 */
 				Promise.all(promises).catch(() => {});
 			}
 		}
 	}
 
+	/**
+	 * @private
+	 * Check to see if any connections are old and will be deemed unnecessary
+	 * due to the last time a query was executed on the connection and the
+	 * {@link #connectionDecay} timeframe. This allows for scaling down.
+	 *
+	 * The number of connections that will be scaled down will not go below
+	 * the {@link minConnectionLimit} even if the number of connections is
+	 * under that limit.
+	 */
 	$onScaleInterval () {
 		const decay = this.connectionDecay;
 
@@ -381,33 +585,91 @@ class Pool {
 		}
 	}
 
+	/**
+	 * @private
+	 * Gets the first connection from the set and optionally removes
+	 * it from the set. This is like `Array.prototype.shift` but since
+	 * we use `Set`, this acts as a convenience method.
+	 *
+	 * @param {Set} set The set to get the first connection from.
+	 * @param {Boolean} [remove=true] Whether to remove the conection
+	 * from the set.
+	 * @returns {PoolConnection}
+	 */
 	$first (set, remove = true) {
 		const values = set.values();
-        const item   = values.next().value;
+        const item   = values.next();
 
-		if (remove) {
-			set.delete(item);
+		if (item) {
+			if (remove) {
+				set.delete(item);
+			}
+
+			return item.value;
 		}
-
-		return item;
 	}
 
+	/**
+	 * @private
+	 * Adds a connection to the set.
+	 *
+	 * Can optionally skip checking if the set has the connection
+	 * if the calling method knows the connection is in the set.
+	 * This check is done to skip re-adding a connection to the set
+	 * for performance.
+	 *
+	 * @param {Set} set The set to add the connection to.
+	 * @param {PoolConnection} connection The connection to add.
+	 * @param {Boolean} [skipCheck=false] If the connection being in the
+	 * set is known, skipping the check if the set has the connection
+	 * can yield a bit faster performance.
+	 * @returns {Pool}
+	 */
 	$add (set, connection, skipCheck = false) {
-		if (skipCheck || !set.has(connection)) {
+		if (skipCheck === true || !set.has(connection)) {
 			set.add(connection);
 		}
 
 		return this;
 	}
 
-	$clear (set) {
-		set.clear();
+	/**
+	 * @private
+	 * Clears the set.
+	 *
+	 * @param {Set} set The set to clear.
+	 * @param {Boolean} [skipCheck=false] Can skip the check if
+	 * the set has connections added to it.
+	 * @returns {Pool}
+	 */
+	$clear (set, skipCheck = false) {
+		if (skipCheck === true || set.size) {
+			set.clear();
+		}
 
 		return this;
 	}
 
-	$remove (set, connection) {
-		set.delete(connection);
+	/**
+	 * @private
+	 * Removes a connection from a set.
+	 *
+	 * Can optionally skip checking if the set has the connection
+	 * if the calling method knows the connection is in the set.
+	 * This check is done to skip removing a connection when the
+	 * connection has not been added to the set.
+	 *
+	 * @param {Set} set The set to remove the connection from.
+	 * @param {PoolConnection} connection The connection to remove.
+	 * @param {Boolean} [skipCheck=false] If the connection being in the
+	 * set is known, skipping the check if the set has the connection
+	 * can yield a bit faster performance.
+	 * @returns {Pool}
+	 */
+	$remove (set, connection, skipCheck = false) {
+		if (skipCheck === true || set.has(connection)) {
+			set.delete(connection);
+		}
 
 		return this;
 	}

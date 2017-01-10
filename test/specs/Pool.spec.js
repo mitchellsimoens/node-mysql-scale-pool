@@ -454,7 +454,7 @@ describe('Pool', function () {
         });
     });
 
-    describe.only('$maybeBufferConnection', function () {
+    describe('$maybeBufferConnection', function () {
         it('should buffer connections on construction', function (done) {
             instance = new PoolMock();
 
