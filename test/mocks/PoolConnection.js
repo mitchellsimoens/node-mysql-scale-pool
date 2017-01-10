@@ -22,6 +22,9 @@ class PoolConnectionMock {
     }
 
     query (query) {
+        /**
+         * query is async, use setTimeout to fake
+         */
         setTimeout(() => query._callback(null, []), 0);
     }
 }

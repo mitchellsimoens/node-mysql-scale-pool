@@ -3,7 +3,7 @@
 const chai   = require('chai');
 const expect = chai.expect;
 
-const Pool               = require('../mocks/Pool');
+const PoolMock           = require('../mocks/Pool');
 const PoolConnectionMock = require('../mocks/PoolConnection');
 
 describe('Pool', function () {
@@ -21,13 +21,17 @@ describe('Pool', function () {
 
     describe('initialization', function () {
         it('should be a pool', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             expect(instance.isPool).to.be.true;
         });
 
         it('should apply defaults', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             expect(instance).to.have.property('acquireTimeout',     10000);
             expect(instance).to.have.property('maxConnectionLimit', 10);
@@ -39,7 +43,8 @@ describe('Pool', function () {
         });
 
         it('should merge config and defaults', function () {
-            instance = new Pool({
+            instance = new PoolMock({
+                bufferOnConstruct  : false,
                 maxConnectionLimit : 20,
                 minConnectionLimit : 5
             });
@@ -54,13 +59,17 @@ describe('Pool', function () {
         });
 
         it('should create ConnectionConfig instance', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             expect(instance.$connectionConfig).to.not.be.undefined;
         });
 
         it('should create connection arrays', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             expect(instance.$connections).to.be.a('set');
             expect(instance.$connections).to.be.empty;
@@ -75,7 +84,9 @@ describe('Pool', function () {
 
     describe('end', function () {
         it('should cleanup properties', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             return instance
                 .end()
@@ -90,7 +101,9 @@ describe('Pool', function () {
         });
 
         it('should remove connections', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             const mock = new PoolConnectionMock(instance);
 
@@ -111,7 +124,9 @@ describe('Pool', function () {
 
     describe('destroy', function () {
         it('should cleanup properties', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             return instance
                 .destroy()
@@ -127,7 +142,9 @@ describe('Pool', function () {
         });
 
         it('should remove connections', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             const mock = new PoolConnectionMock(instance);
 
@@ -148,7 +165,9 @@ describe('Pool', function () {
 
     describe('getConnection', function () {
         it('should create a new connection', function * () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             const stub       = this.sandbox.stub(instance, '$connectConnection').resolves(new PoolConnectionMock(instance));
             const connection = yield instance.getConnection();
@@ -158,7 +177,9 @@ describe('Pool', function () {
         });
 
         it('should handle when a pool is closed', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             instance.$closed = true;
 
@@ -170,7 +191,9 @@ describe('Pool', function () {
         });
 
         it('should get a free connection', function * () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             const mock = new PoolConnectionMock(instance);
 
@@ -185,7 +208,8 @@ describe('Pool', function () {
         });
 
         it('should return error if maxConnectionLimit is hit', function () {
-            instance = new Pool({
+            instance = new PoolMock({
+                bufferOnConstruct  : false,
                 maxConnectionLimit : 1
             });
 
@@ -204,18 +228,25 @@ describe('Pool', function () {
 
     describe('query', function () {
         it('should create a new connection', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false,
+                connectionBuffer  : 0
+            });
 
             return instance
                 .query('SELECT 1;')
                 .then(() => {
-                    expect(instance.$connections.size).to.be.above(0);
-                    expect(instance.$freeConnections.size).to.be.above(0);
+                    expect(instance.$connections.size).to.be.equal(1);
+                    expect(instance.$busyConnections.size).to.be.equal(0);
+                    expect(instance.$freeConnections.size).to.be.equal(1);
                 });
         });
 
         it('should mark connection as busy', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false,
+                connectionBuffer  : 0
+            });
 
             const promise = instance.query('SELECT 1;');
 
@@ -227,7 +258,10 @@ describe('Pool', function () {
         });
 
         it('should return db result', function * () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false,
+                connectionBuffer  : 0
+            });
 
             const mock   = this.sandbox.stub(instance, '$query').resolves([{}]);
             const result = yield instance.query('SELECT 1;');
@@ -239,7 +273,10 @@ describe('Pool', function () {
         });
 
         it('should return an error', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false,
+                connectionBuffer  : 0
+            });
 
             const mock = this.sandbox.stub(instance, '$query').rejects(new Error('foo'));
 
@@ -252,7 +289,9 @@ describe('Pool', function () {
         });
 
         it('should queue the query', function () {
-            instance = new Pool({
+            instance = new PoolMock({
+                bufferOnConstruct  : false,
+                connectionBuffer   : 0,
                 maxConnectionLimit : 2
             });
 
@@ -268,9 +307,11 @@ describe('Pool', function () {
         });
 
         it('should throw an error if queue is full', function () {
-            instance = new Pool({
-                queueLimit         : 1,
-                maxConnectionLimit : 1
+            instance = new PoolMock({
+                bufferOnConstruct  : false,
+                connectionBuffer   : 0,
+                maxConnectionLimit : 1,
+                queueLimit         : 1
             });
 
             const promises = [];
@@ -291,7 +332,9 @@ describe('Pool', function () {
 
     describe('releaseConnection', function () {
         it('should release the connection', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             const mock = new PoolConnectionMock(instance);
 
@@ -310,7 +353,9 @@ describe('Pool', function () {
 
     describe('_purgeConnection', function () {
         it('should purge the connection', function () {
-            instance = new Pool();
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
 
             const mock = new PoolConnectionMock(instance);
 
@@ -329,9 +374,10 @@ describe('Pool', function () {
 
     describe('$onScaleInterval', function () {
         it('should scale down connection has not been queried', function (done) {
-            instance = new Pool({
-                connectionDecay : 10,
-                scaleInterval   : 20
+            instance = new PoolMock({
+                bufferOnConstruct : false,
+                connectionDecay   : 10,
+                scaleInterval     : 20
             });
 
             const mock = new PoolConnectionMock(instance);
@@ -352,9 +398,10 @@ describe('Pool', function () {
         });
 
         it('should scale down connection that has been queried', function (done) {
-            instance = new Pool({
-                connectionDecay : 10,
-                scaleInterval   : 20
+            instance = new PoolMock({
+                bufferOnConstruct : false,
+                connectionDecay   : 10,
+                scaleInterval     : 20
             });
 
             const mock = new PoolConnectionMock(instance);
@@ -377,9 +424,10 @@ describe('Pool', function () {
         });
 
         it('should not scale down connection', function (done) {
-            instance = new Pool({
-                connectionDecay : 10,
-                scaleInterval   : 20
+            instance = new PoolMock({
+                bufferOnConstruct : false,
+                connectionDecay   : 10,
+                scaleInterval     : 20
             });
 
             const mock1 = new PoolConnectionMock(instance);
@@ -403,6 +451,65 @@ describe('Pool', function () {
 
                 done();
             }, 30);
+        });
+    });
+
+    describe.only('$maybeBufferConnection', function () {
+        it('should buffer connections on construction', function (done) {
+            instance = new PoolMock();
+
+            setTimeout(() => {
+                //hack to allow the connections to connect
+                expect(instance.$connections.size).to.be.equal(5);
+                expect(instance.$busyConnections.size).to.be.equal(0);
+                expect(instance.$freeConnections.size).to.be.equal(5);
+
+                done();
+            }, 0);
+        });
+
+        it('should buffer 3 connections on construction', function (done) {
+            instance = new PoolMock({
+                connectionBuffer : 3
+            });
+
+            setTimeout(() => {
+                //hack to allow the connections to connect
+                expect(instance.$connections.size).to.be.equal(3);
+                expect(instance.$busyConnections.size).to.be.equal(0);
+                expect(instance.$freeConnections.size).to.be.equal(3);
+
+                done();
+            }, 0);
+        });
+
+        it('should not buffer connections on construction', function () {
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
+
+            expect(instance.$connections.size).to.be.equal(0);
+            expect(instance.$busyConnections.size).to.be.equal(0);
+            expect(instance.$freeConnections.size).to.be.equal(0);
+        });
+
+        it('should buffer connections on query', function () {
+            instance = new PoolMock({
+                bufferOnConstruct : false
+            });
+
+            return instance
+                .query('SELECT 1;')
+                .then(() => {
+                    /**
+                     * 6 connections should be created. 1 for the query
+                     * and 5 to be the buffer number due to connectionBuffer
+                     * config.
+                     */
+                    expect(instance.$connections.size).to.be.equal(6);
+                    expect(instance.$busyConnections.size).to.be.equal(0);
+                    expect(instance.$freeConnections.size).to.be.equal(6);
+                });
         });
     });
 });

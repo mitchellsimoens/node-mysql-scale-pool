@@ -6,6 +6,8 @@ const PoolConnection   = require('mysql/lib/PoolConnection');
 
 const configDefaults = {
 	acquireTimeout     : 10000, // 10 seconds
+	bufferOnConstruct  : true,
+	connectionBuffer   : 5,
 	connectionConfig   : {},
 	connectionDecay    : 300000, // 5 minutes
 	maxConnectionLimit : 10,
@@ -44,6 +46,10 @@ class Pool {
 		if (this.scaleInterval && this.connectionDecay) {
 			this.$scaleInterval = setInterval(this.$onScaleInterval.bind(this), this.scaleInterval);
 		}
+
+		if (this.bufferOnConstruct) {
+			this.$maybeBufferConnection();
+		}
 	}
 
 	end () {
@@ -70,7 +76,7 @@ class Pool {
 			.then(this.$onEnd.bind(this));
 	}
 
-	getConnection () {
+	getConnection (fromBuffer = false) {
 		return new Promise((resolve, reject) => {
 			if (this.$closed) {
 				return reject(new Error('This pool is closed'));
@@ -86,7 +92,7 @@ class Pool {
 			} else if (this.$connections.size < this.maxConnectionLimit) {
 				/**
 				 * We have no free connections and we haven't reached
-				 * the maxConnectionLimit so create one.
+				 * the maxConnectionLimit so create and connect one.
 				 */
 				const connection = this.$createConnection();
 
@@ -141,6 +147,12 @@ class Pool {
 				 */
 				this
 					.getConnection()
+					.then(this.$useConnection.bind(this))
+					.then((connection) => {
+						this.$maybeBufferConnection();
+
+						return connection;
+					})
 					.then(connection => this.$query(connection, sql, values))
 					.then(resolve)
 					.catch(reject);
@@ -251,17 +263,14 @@ class Pool {
 	$query (connection, sql, values) {
 		return new Promise((resolve, reject) => {
 			const query = this.$createQuery(sql, values, (error, results) => {
+				this.$releaseConnection(connection);
+
 				if (error) {
 					reject(error);
 				} else {
 					resolve(results);
 				}
 			});
-
-			this.$add(this.$busyConnections, connection);
-
-			//release the connection when a query ends
-			query.once('end', this.$releaseConnection.bind(this, connection));
 
 			connection.$lastQuery = new Date().getTime();
 
@@ -286,6 +295,15 @@ class Pool {
 		return connection;
 	}
 
+	$useConnection (connection) {
+		if (!this.$closed) {
+			this.$remove(this.$freeConnections, connection)
+				.$add(this.$busyConnections, connection);
+		}
+
+		return connection;
+	}
+
 	$removeConnection (connection) {
 		if (!this.$closed) {
 			this.$remove(this.$busyConnections, connection)
@@ -294,6 +312,28 @@ class Pool {
 		}
 
 		return connection;
+	}
+
+	$maybeBufferConnection () {
+		let buffer = this.connectionBuffer;
+
+		if (buffer && this.$connections.size  < this.maxConnectionLimit && this.$freeConnections.size < buffer) {
+			buffer = this.$connections.size + buffer > this.maxConnectionLimit ?
+				this.maxConnectionLimit - this.$connections.size : // buffer would go over the maxConnectionLimit
+				this.$freeConnections.size ?
+					buffer - this.$freeConnections.size : // we have some freeConnections, subtract from buffer
+					buffer;
+
+			if (buffer > 0) {
+				const promises = [];
+
+				for (let i = 0; i < buffer; i++) {
+					promises.push(this.getConnection(true));
+				}
+
+				Promise.all(promises).catch(() => {});
+			}
+		}
 	}
 
 	$onScaleInterval () {

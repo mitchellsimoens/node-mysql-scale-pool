@@ -25,6 +25,9 @@ class PoolMock extends Pool {
         return new Promise(resolve => {
             this.$add(this.$busyConnections, connection);
 
+            /**
+             * connection is async, use setTimeout to fake
+             */
             setTimeout(() => {
                 this.$releaseConnection(connection);
 
