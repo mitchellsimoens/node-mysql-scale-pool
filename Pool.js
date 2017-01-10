@@ -512,6 +512,17 @@ class Pool {
 					buffer - this.$freeConnections.size : // we have some freeConnections, subtract from buffer
 					buffer;
 
+			/**
+			 * TODO
+			 * the issue here is if there are multiple requests from a client
+			 * app, connections being created for this buffering will be busy
+			 * and so a 2nd request will also attempt to buffer connections
+			 * until the total number of connections hits the maxConnectionLimit.
+			 * Connections being buffered needs to be tracked separately and
+			 * be used in the above determination on the actual number of connections
+			 * to be buffered.
+			 */
+
 			if (buffer > 0) {
 				const promises = [];
 
