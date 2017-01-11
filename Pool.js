@@ -2,7 +2,6 @@
 
 const Connection       = require('mysql/lib/Connection');
 const ConnectionConfig = require('mysql/lib/ConnectionConfig');
-const PoolConnection   = require('mysql/lib/PoolConnection');
 
 const configDefaults = {
 	/**
@@ -26,6 +25,11 @@ const configDefaults = {
 	 * buffered to be available for a query.
 	 */
 	connectionBuffer   : 5,
+	/**
+	 * @cfg {PoolConnection} [connectionClass=PoolConnection] The connection
+	 * class to use to create new connections with.
+	 */
+	connectionClass    : require('mysql/lib/PoolConnection'),
 	/**
 	 * @Cfg {Object} [connectionConfig={}] The connection configurations
 	 * passed to the PoolConnection. For valid options, please see the
@@ -147,11 +151,9 @@ class Pool {
 	 * If no connections are free and the {@link #maxConnectionLimit}
 	 * has not been reached, a connection will be created and connected to.
 	 *
-	 * @param {Boolean} [fromBuffer=false] Whether a connection is being retrieved
-	 * from a buffer. This will be used for an event.
 	 * @returns {Promise}
 	 */
-	getConnection (fromBuffer = false) {
+	getConnection () {
 		return new Promise((resolve, reject) => {
 			if (this.$closed) {
 				return reject(new Error('This pool is closed'));
@@ -282,7 +284,7 @@ class Pool {
 		connectionConfig.clientFlags   = config.clientFlags;
 		connectionConfig.maxPacketSize = config.maxPacketSize;
 
-		const connection = new PoolConnection(this, {
+		const connection = new this.connectionClass(this, {
 			config : connectionConfig
 		});
 
@@ -347,6 +349,7 @@ class Pool {
 			this.$freeConnections =
 			this.$queryQueue      =
 			this.$scaleInterval   =
+			this.connectionClass  =
 			null;
 
 		return arg;

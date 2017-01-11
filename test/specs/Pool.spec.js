@@ -38,6 +38,8 @@ describe('Pool', function () {
             expect(instance).to.have.property('minConnectionLimit', 0);
             expect(instance).to.have.property('queueLimit',         Infinity);
 
+            expect(instance.connectionClass).to.be.equal(PoolConnectionMock);
+
             expect(instance.connectionConfig).to.be.an('object');
             expect(instance.connectionConfig).to.be.empty;
         });
@@ -169,7 +171,9 @@ describe('Pool', function () {
                 bufferOnConstruct : false
             });
 
-            const stub       = this.sandbox.stub(instance, '$connectConnection').resolves(new PoolConnectionMock(instance));
+            const stub       = this.sandbox
+                .stub(instance, '$connectConnection')
+                .resolves(new PoolConnectionMock(instance));
             const connection = yield instance.getConnection();
 
             expect(connection).to.be.ok;
@@ -200,7 +204,9 @@ describe('Pool', function () {
             instance.$add(instance.$connections,     mock);
             instance.$add(instance.$freeConnections, mock);
 
-            const stub       = this.sandbox.stub(instance, '$connectConnection').resolves(new PoolConnectionMock(instance));
+            const stub       = this.sandbox
+                .stub(instance, '$connectConnection')
+                .resolves(new PoolConnectionMock(instance));
             const connection = yield instance.getConnection();
 
             expect(connection).to.be.ok;

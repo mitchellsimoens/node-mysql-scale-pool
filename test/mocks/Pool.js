@@ -5,6 +5,12 @@ const Pool             = require('../../Pool');
 const PoolConnection   = require('./PoolConnection');
 
 class PoolMock extends Pool {
+    constructor (config = {}) {
+        config.connectionClass = PoolConnection;
+
+        super(config);
+    }
+
     $createConnection () {
 		let config           = this.$connectionConfig,
 			connectionConfig = new ConnectionConfig(config);
@@ -12,7 +18,7 @@ class PoolMock extends Pool {
 		connectionConfig.clientFlags   = config.clientFlags;
 		connectionConfig.maxPacketSize = config.maxPacketSize;
 
-		const connection = new PoolConnection(this, {
+		const connection = new this.connectionClass(this, {
 			config : connectionConfig
 		});
 
