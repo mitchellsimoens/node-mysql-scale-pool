@@ -339,9 +339,7 @@ class Pool {
 			.$clear(this.$freeConnections)
 			.$clear(this.$queryQueue);
 
-		if (this.$scaleInterval) {
-			clearInterval(this.$scaleInterval);
-		}
+		this.$scaleInterval && clearInterval(this.$scaleInterval);
 
 		this.$connectionConfig    =
 			this.$connections     =
@@ -526,21 +524,19 @@ class Pool {
 			 * to be buffered.
 			 */
 
-			if (buffer > 0) {
-				const promises = [];
+			const promises = [];
 
-				for (let i = 0; i < buffer; i++) {
-					promises.push(this.getConnection(true));
-				}
-
-				/**
-				 * Capture any connection rejections in the case a connection
-				 * could not connect to the database. We could turn around and
-				 * execute this $maybeBufferConnection method to try again, however,
-				 * this could end up in an endless loop if a database is down.
-				 */
-				Promise.all(promises).catch(() => {});
+			for (let i = 0; i < buffer; i++) {
+				promises.push(this.getConnection(true));
 			}
+
+			/**
+			 * Capture any connection rejections in the case a connection
+			 * could not connect to the database. We could turn around and
+			 * execute this $maybeBufferConnection method to try again, however,
+			 * this could end up in an endless loop if a database is down.
+			 */
+			Promise.all(promises).catch(() => {});
 		}
 	}
 
@@ -596,6 +592,10 @@ class Pool {
 					});
 				}
 			}
+		} else {
+			this.$scaleInterval && clearInterval(this.$scaleInterval);
+
+			this.$scaleInterval = null;
 		}
 	}
 

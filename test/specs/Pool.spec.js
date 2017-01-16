@@ -334,6 +334,29 @@ describe('Pool', function () {
                     expect(error).to.be.an('error');
                 });
         });
+
+        it('should throw an error if pool is closed', function () {
+            instance = new PoolMock({
+                bufferOnConstruct  : false,
+                connectionBuffer   : 0,
+                maxConnectionLimit : 1,
+                queueLimit         : 1
+            });
+
+            return instance
+                .end()
+                .then(() => {
+                    const promise = instance.query('SELECT 1;');
+
+                    return promise
+                        .then(() => {
+                            expect(promise).to.not.be.fulfilled;
+                        })
+                        .catch(() => {
+                            expect(promise).to.be.rejectedWith(Error, 'This pool is closed');
+                        });
+                });
+        });
     });
 
     describe('releaseConnection', function () {
