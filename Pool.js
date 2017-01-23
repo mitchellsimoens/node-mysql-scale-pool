@@ -83,7 +83,12 @@ class Pool {
 		/**
 		 * Holds all connections that have been created.
 		 */
-		this.$connections     = new Set();
+		this.$connections = new Set();
+		/**
+		 * Holds the connections that have been buffered so buffering
+		 * connections does not get out of control.
+		 */
+		this.$bufferQueue = new Set();
 		/**
 		 * Holds connections that are busy. This is connection either
 		 * connecting or querying.
@@ -337,6 +342,7 @@ class Pool {
 			.$clear(this.$connections)
 			.$clear(this.$busyConnections)
 			.$clear(this.$freeConnections)
+			.$clear(this.$bufferQueue)
 			.$clear(this.$queryQueue);
 
 		this.$scaleInterval && clearInterval(this.$scaleInterval);
@@ -346,6 +352,7 @@ class Pool {
 			this.$busyConnections =
 			this.$freeConnections =
 			this.$queryQueue      =
+			this.$bufferQueue     =
 			this.$scaleInterval   =
 			this.connectionClass  =
 			null;
@@ -445,7 +452,8 @@ class Pool {
 	$releaseConnection (connection) {
 		if (!this.$closed) {
 			this.$remove(this.$busyConnections, connection)
-				.$add(this.$freeConnections, connection);
+				.$remove(this.$bufferQueue,     connection)
+				.$add   (this.$freeConnections, connection);
 
 			if (this.$freeConnections.size > 0 && this.$queryQueue.size) {
 				const item = this.$first(this.$queryQueue);
@@ -487,7 +495,8 @@ class Pool {
 		if (!this.$closed) {
 			this.$remove(this.$busyConnections, connection)
 				.$remove(this.$freeConnections, connection)
-				.$remove(this.$connections,     connection);
+				.$remove(this.$connections,     connection)
+				.$remove(this.$bufferQueue,     connection);
 		}
 
 		return connection;
@@ -507,36 +516,33 @@ class Pool {
 		let buffer = this.connectionBuffer;
 
 		if (buffer && this.$connections.size  < this.maxConnectionLimit && this.$freeConnections.size < buffer) {
-			buffer = this.$connections.size + buffer > this.maxConnectionLimit ?
-				this.maxConnectionLimit - this.$connections.size : // buffer would go over the maxConnectionLimit
-				this.$freeConnections.size ?
-					buffer - this.$freeConnections.size : // we have some freeConnections, subtract from buffer
-					buffer;
+			buffer = (
+				this.$connections.size + buffer > this.maxConnectionLimit ?
+					this.maxConnectionLimit - this.$connections.size : // buffer would go over the maxConnectionLimit
+					this.$freeConnections.size ?
+						buffer - this.$freeConnections.size : // we have some freeConnections, subtract from buffer
+						buffer
+			) - this.$bufferQueue.size;
 
-			/**
-			 * TODO
-			 * the issue here is if there are multiple requests from a client
-			 * app, connections being created for this buffering will be busy
-			 * and so a 2nd request will also attempt to buffer connections
-			 * until the total number of connections hits the maxConnectionLimit.
-			 * Connections being buffered needs to be tracked separately and
-			 * be used in the above determination on the actual number of connections
-			 * to be buffered.
-			 */
+			if (buffer && buffer > 0) {
+				const promises = [];
 
-			const promises = [];
+				for (let i = 0; i < buffer; i++) {
+					let connection = this.getConnection(true);
 
-			for (let i = 0; i < buffer; i++) {
-				promises.push(this.getConnection(true));
+					this.$add(this.$bufferQueue, connection);
+
+					promises.push(connection);
+				}
+
+				/**
+				 * Capture any connection rejections in the case a connection
+				 * could not connect to the database. We could turn around and
+				 * execute this $maybeBufferConnection method to try again, however,
+				 * this could end up in an endless loop if a database is down.
+				 */
+				Promise.all(promises).catch(() => {});
 			}
-
-			/**
-			 * Capture any connection rejections in the case a connection
-			 * could not connect to the database. We could turn around and
-			 * execute this $maybeBufferConnection method to try again, however,
-			 * this could end up in an endless loop if a database is down.
-			 */
-			Promise.all(promises).catch(() => {});
 		}
 	}
 
